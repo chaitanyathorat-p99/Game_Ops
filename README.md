@@ -538,47 +538,6 @@ Europe_HighPing_Mixed,P005,waiting_for_more_players
 Under_Review_Pool,P003,isolated
 ```
 
----
-
-## 📐 Diagrams
-
-PlantUML source code for all 7 system diagrams is in [`diagram.txt`](./diagram.txt).
-
-| # | Diagram | Render at |
-|---|---|---|
-| 1 | System Architecture Overview | [plantuml.com](https://www.plantuml.com/plantuml/uml/) |
-| 2 | Data Cleaning Pipeline | [plantuml.com](https://www.plantuml.com/plantuml/uml/) |
-| 3 | Suspicious Player Detection Logic | [plantuml.com](https://www.plantuml.com/plantuml/uml/) |
-| 4 | Leaderboard Ranking Logic | [plantuml.com](https://www.plantuml.com/plantuml/uml/) |
-| 5 | Matchmaking Grouping Algorithm | [plantuml.com](https://www.plantuml.com/plantuml/uml/) |
-| 6 | Scaling Architecture (Production) | [plantuml.com](https://www.plantuml.com/plantuml/uml/) |
-| 7 | End-to-End Demo Flow (Swimlane) | [plantuml.com](https://www.plantuml.com/plantuml/uml/) |
-
-To render: copy any `@startuml ... @enduml` block from `diagram.txt` and paste at [plantuml.com/plantuml/uml](https://www.plantuml.com/plantuml/uml/).
-
----
-
-## ⚠️ Assumptions & Limitations
-
-### Assumptions
-
-- CSV is the data source — no real-time stream is assumed for the prototype
-- A "fair leaderboard" means clean players get numeric ranks; flagged players are shown separately, never mixed in
-- Ranking is by **total accumulated score** across all matches — this rewards both skill and participation, which is the right model for a weekend score event (not a skill ladder)
-- Z-score outlier detection requires at least **5 matches** of history per player; fewer matches are checked against absolute rule thresholds only
-- The "weekend event" framing means there is not enough historical data to train an ML anomaly model meaningfully — hence the rule-based approach
-
-### Limitations
-
-- Thresholds in `config.py` are manually set based on the sample data. A production system would calibrate them from historical match data per game mode
-- Skill score is percentile-based **within the current player pool** — it is relative, not absolute, so it shifts as the pool changes
-- Small region+ping buckets (fewer than 6 players) skip skill tiering entirely rather than producing meaningless thirds
-- The prototype API uses an **in-memory DataFrame** that is not persisted across restarts — swap for PostgreSQL in a real deployment
-- No authentication or rate limiting on API endpoints
-- Matchmaking is **static bucketing**, not a live queue with wait-time optimization
-
----
-
 ## 🛠 Tech Stack
 
 | Layer | Technology | Reason |
@@ -593,14 +552,3 @@ To render: copy any `@startuml ... @enduml` block from `diagram.txt` and paste a
 | Message queue | Kafka / AWS SQS | Async ingestion, decouples writes from API latency |
 | Monitoring | Prometheus + Grafana | Industry standard, works with FastAPI metrics middleware |
 
----
-
-## 🗂 Related Files
-
-| File | Purpose |
-|---|---|
-| `implementation_plan.txt` | Full phased implementation guide with annotated code snippets |
-| `diagram.txt` | PlantUML source for all 7 system diagrams |
-| `design_doc.md` | Short technical document (~1.5 pages) for submission |
-| `data/players.csv` | Sample input data |
-| `output/` | All generated CSV outputs |
