@@ -1,0 +1,876 @@
+================================================================================
+              DIAGRAM PROMPTS — GAME OPS SYSTEM
+              Use each prompt in an AI image/diagram generator
+              (e.g., ChatGPT, Claude, Eraser.io, Mermaid Live, Whimsical AI)
+================================================================================
+
+--------------------------------------------------------------------------------
+DIAGRAM 1 — SYSTEM ARCHITECTURE OVERVIEW
+Tool suggestion: Eraser.io, Whimsical AI, or ChatGPT (diagram mode)
+--------------------------------------------------------------------------------
+
+PROMPT:
+Create a clean, professional system architecture diagram for a Game Ops System.
+The diagram should show the following flow from left to right:
+
+Input Layer:
+- A box labeled "players.csv" (CSV file icon) as the single data input source.
+
+Processing Layer (center, three parallel vertical boxes):
+- Box 1: "loader.py" — labeled with sub-steps: Validate Columns → Drop Nulls/Corrupt Rows → Normalize Strings → Deduplicate → Compute Derived Columns (score_per_second, kd_ratio)
+- Box 2: "config.py" — labeled "Central Threshold Config" — draw a dashed arrow from this box pointing into suspicious.py and matchmaking.py to show it feeds thresholds
+- Three core modules below loader.py, each receiving data from loader.py via arrows:
+    - "suspicious.py" (Rule-Based Flags + Z-Score Outlier Detection)
+    - "leaderboard.py" (Global Rank + Region-Wise Rank)
+    - "matchmaking.py" (Region → Ping Band → Skill Tier Grouping)
+- Show an arrow from suspicious.py into both leaderboard.py and matchmaking.py labeled "flagged_ids"
+
+Output Layer (right side):
+- Four output file boxes connected to the modules:
+    - suspicious_players.csv ← from suspicious.py
+    - leaderboard_global.csv ← from leaderboard.py
+    - leaderboard_region.csv ← from leaderboard.py
+    - matchmaking_groups.csv ← from matchmaking.py
+
+Optional API Layer (bottom, dashed border box):
+- "FastAPI (api/routes.py)" with four endpoint labels:
+    POST /submit-score
+    GET /leaderboard
+    GET /flagged-players
+    GET /matchmaking
+- Draw a dashed arrow from this box up into the Processing Layer
+
+Use a light background, rounded boxes, color-code by layer (blue for input, green for processing, orange for output, purple for API). Label all arrows.
+
+--------------------------------------------------------------------------------
+DIAGRAM 2 — DATA FLOW & CLEANING PIPELINE (loader.py)
+Tool suggestion: Mermaid Live Editor, Lucidchart, or ChatGPT
+--------------------------------------------------------------------------------
+
+PROMPT:
+Create a vertical flowchart showing the data cleaning and loading pipeline for a Python data loader module. Use standard flowchart shapes (rectangles for processes, diamonds for decisions, parallelograms for input/output).
+
+Steps in order from top to bottom:
+
+1. [Input] Read CSV file (pd.read_csv)
+2. [Decision] Are all required columns present?
+   - No → [End] Raise ValueError with missing column names
+   - Yes → Continue
+3. [Process] Drop rows with nulls in any required field
+4. [Process] Enforce numeric types (pd.to_numeric, coerce errors)
+5. [Process] Drop rows where numeric conversion failed
+6. [Decision] Is match_duration_seconds > 0 AND all numeric fields >= 0?
+   - No → Drop row, log as "corrupt row"
+   - Yes → Continue
+7. [Process] Deduplicate on (player_id, match_id) — keep first occurrence
+8. [Process] Normalize strings: region and device → .strip().title()
+9. [Process] Compute derived columns:
+   score_per_second = score / match_duration_seconds
+   kd_ratio = kills / max(deaths, 1)
+10. [Output] Clean DataFrame ready for downstream modules
+11. [Side Output] Print: "Dropped X of Y rows"
+
+Use a blue color theme. Add a note box on the side explaining why nulls are dropped instead of filled with zero: "0 is a valid score — silent fill would corrupt statistics."
+
+--------------------------------------------------------------------------------
+DIAGRAM 3 — SUSPICIOUS PLAYER DETECTION LOGIC
+Tool suggestion: Mermaid Live Editor, draw.io, or Eraser.io
+--------------------------------------------------------------------------------
+
+PROMPT:
+Create a two-part diagram for a suspicious player detection system.
+
+PART A — Per-Match Rule Checks (horizontal decision tree):
+Show a single match record entering from the left. Run it through 5 parallel rule checks (show as 5 stacked decision diamonds):
+
+Rule 1: score_per_second > 50? → YES → flag_score_spike = True
+Rule 2: kills >= 20 AND deaths == 0? → YES → flag_zero_death_kd = True
+Rule 3: match_duration < 120s AND score > 5000? → YES → flag_short_match = True
+Rule 4: kills > 50? → YES → flag_extreme_kills = True
+Rule 5: ping < 5 OR ping > 500? → YES → flag_ping_anomaly = True (label this "data quality, not cheat severity" in a note)
+
+Show that all five checks happen independently (parallel, not sequential) and results are attached to the match row.
+
+PART B — Player-Level Severity Aggregation (vertical flowchart below Part A):
+
+Input: All flagged match rows grouped by player_id
+
+Step 1: [Decision] Did any match trigger flag_score_spike OR flag_zero_death_kd?
+  YES → Add "High" to severity candidates, add reason "score_or_kd_impossible"
+
+Step 2: [Decision] Did any match trigger flag_short_match OR flag_extreme_kills?
+  YES → Add "Medium" to severity candidates, add reason "short_match_or_extreme_kills"
+
+Step 3: [Decision] Does player have >= 5 matches AND any match has z-score > 3 on score or kills?
+  YES → Add "Low" to severity candidates, add reason "statistical_outlier"
+
+Step 4: [Process] Final severity = highest of all candidates (High > Medium > Low)
+
+Step 5: [Decision] Were more than 50% of the player's matches flagged by cheat rules?
+  YES → Override severity to "High" (repeat-offense escalation)
+
+Step 6: [Decision] Were any candidates found?
+  NO → Player is clean, skip
+  YES → Output row: player_id | flagged_matches | flag_reasons | severity
+
+Use red for High severity, orange for Medium, yellow for Low, grey for clean. Add a callout box with the example: "P003: score_per_second = 1650 → Rule 1 triggers → High severity."
+
+--------------------------------------------------------------------------------
+DIAGRAM 4 — LEADERBOARD RANKING LOGIC
+Tool suggestion: Mermaid Live Editor or Whimsical AI
+--------------------------------------------------------------------------------
+
+PROMPT:
+Create a flowchart showing the leaderboard generation process for a multiplayer game scoring system.
+
+Flow:
+
+1. [Input] Aggregated player stats DataFrame (total_score, total_kills, total_deaths, matches_played, primary_region)
+
+2. [Process] Split players into two groups:
+   - Clean players (not in flagged_ids set)
+   - Flagged players (in flagged_ids set)
+
+3. For Clean players:
+   [Process] Sort by multi-column tiebreaker in this exact priority order:
+     1st: total_score (descending — higher is better)
+     2nd: total_deaths (ascending — fewer is better)
+     3rd: total_kills (descending — more is better)
+     4th: matches_played (descending — more is better)
+   [Process] Assign numeric rank (1, 2, 3...) → status = "clean"
+
+4. For Flagged players:
+   [Process] rank = None, status = "under_review"
+   Add note: "Flagged players are never assigned a numeric rank — they cannot shift a clean player's rank number"
+
+5. [Process] Concatenate: clean (ranked) on top, flagged (unranked) below → single output DataFrame
+
+6. [Output A] Global Leaderboard CSV
+
+7. [Process] For Region-Wise Leaderboard: group clean players by primary_region, apply same sort/rank logic within each group
+
+8. [Output B] Region Leaderboard CSV (one ranked table per region)
+
+Add a small example table on the side showing:
+Rank 1: P004, Score 3500, Deaths 6, Status: clean
+Rank 2: P001, Score 3200, Deaths 4, Status: clean
+Unranked: P003, Score 99000, Status: under_review
+
+Use green for clean players, red/orange for flagged. Note in a callout: "P003 appears but is not ranked — its score doesn't push anyone down."
+
+--------------------------------------------------------------------------------
+DIAGRAM 5 — MATCHMAKING GROUPING ALGORITHM
+Tool suggestion: Mermaid Live Editor, draw.io, or Eraser.io
+--------------------------------------------------------------------------------
+
+PROMPT:
+Create a three-level hierarchical tree diagram (top-down) showing how players are grouped into match lobbies in a multiplayer game matchmaking system.
+
+Level 0 (root): "All Eligible Players" (exclude High-severity flagged players; Medium severity → separate "Under Review Pool"; Low severity → tagged but included)
+
+Level 1 — Region Split:
+Branch into: India | SEA | Europe | (other regions...)
+Label: "Pass 1: Group by Region (minimizes latency)"
+
+Level 2 — Ping Band Split (within each region):
+Each region branches into three sub-nodes:
+  LowPing (ping <= 80ms) | MedPing (81–150ms) | HighPing (ping > 150ms)
+Label: "Pass 2: Separate by Ping Band (hard rule — never mix Low and High ping)"
+
+Level 3 — Skill Tier Split (within each region+ping bucket):
+Each ping bucket branches into:
+  IF bucket has >= 6 players:
+    Beginner (bottom 33% skill score) | Intermediate (middle 33%) | Advanced (top 33%)
+  IF bucket has < 6 players:
+    Single node labeled "Small Pool — Skill Mixed" (no tier split)
+Label: "Pass 3: Skill tiers based on percentile-normalized skill score"
+
+Final leaf nodes = match groups. Show example group names like:
+  "India_LowPing_Advanced" → [P001, P004]
+  "SEA_MedPing_Mixed (small pool)" → [P005]
+  "Under_Review_Pool" → [P003]
+
+Add a note box explaining skill score formula:
+  skill_score = (avg_score_pct × 0.5) + (avg_kills_pct × 0.3) − (avg_deaths_pct × 0.2)
+  "Percentile-normalized so all three components contribute equally per their weights"
+
+Use a top-down tree layout. Color code: blue for Level 1, teal for Level 2, green for Level 3 clean groups, orange for small pool, red for under-review pool.
+
+Also add a small legend showing the minimum group size rule: groups with fewer than 4 players are labeled "Waiting for More Players."
+
+--------------------------------------------------------------------------------
+DIAGRAM 6 — SCALING ARCHITECTURE (High-Traffic / Production)
+Tool suggestion: Eraser.io, Whimsical AI, Lucidchart, or CloudCraft.io
+--------------------------------------------------------------------------------
+
+PROMPT:
+Create a cloud architecture diagram showing how the Game Ops System would scale from 2,000 to 200,000+ players. Use standard cloud architecture icons or clean labeled boxes.
+
+Show the following components and their connections:
+
+Clients / Ingestion (left side):
+- "Game Clients (Mobile/PC/Console)" → send match results via HTTP POST
+
+API Layer (center-top):
+- "Load Balancer" receives all traffic
+- Behind it: multiple "FastAPI Pods (stateless, horizontally scalable)" — show 3 pods to indicate horizontal scaling
+- Arrow from pods → "Message Queue (Kafka or AWS SQS)" labeled "async write — decouples ingestion from processing"
+
+Processing Layer (center):
+- "Worker Service" consumes from the queue → writes to database
+- "Anomaly Detection Worker" runs rule checks on each new match result
+- Both workers write results to the database
+
+Data Layer (center-bottom):
+- "PostgreSQL (primary store)" — stores all match records, player aggregates, flagged players
+- "Redis (Sorted Set)" — labeled "Hot Leaderboard Cache — O(log N) rank reads, refreshed every 30 seconds by background job"
+- Arrow from PostgreSQL → Redis labeled "background refresh job (every 30s)"
+
+Read Path (right side):
+- "GET /leaderboard" → hits Redis first (cache hit) → falls back to PostgreSQL (cache miss)
+- "GET /flagged-players" → hits PostgreSQL directly
+- "GET /matchmaking" → hits PostgreSQL directly
+
+Monitoring (bottom):
+- "Prometheus" scrapes metrics from all API pods and workers
+- "Grafana Dashboard" reads from Prometheus — show 3 panels: API Latency, Queue Lag, Error Rate
+
+Add annotations:
+- Label the Kafka/SQS queue: "Handles 200k+ match submissions/day without API blocking"
+- Label Redis: "Top-100 leaderboard served in <5ms"
+- Label PostgreSQL: "Partitioned by region and date for fast range queries"
+- Label Load Balancer: "Auto-scales pods based on request rate"
+
+Use AWS-style or generic cloud icons. Color: blue for API layer, yellow for queue/async, green for data layer, purple for monitoring.
+
+--------------------------------------------------------------------------------
+DIAGRAM 7 — END-TO-END DATA FLOW (Demo Walkthrough Diagram)
+Tool suggestion: Mermaid Live, Whimsical AI, or a simple swimlane diagram
+--------------------------------------------------------------------------------
+
+PROMPT:
+Create a swimlane flowchart with 4 horizontal lanes showing the complete end-to-end data flow of the Game Ops System, suitable for a 5-minute demo walkthrough.
+
+Lane 1 — Input:
+  players.csv → loaded by loader.py → clean DataFrame (show sample row: P003, score=99000, duration=60s)
+
+Lane 2 — Detection:
+  clean DataFrame → suspicious.py runs 5 rule checks → flag_score_spike fires for P003 (score_per_second = 1650 > 50) → aggregate_player_severity → flagged_df (P003: High severity)
+
+Lane 3 — Leaderboard:
+  clean DataFrame + flagged_ids → leaderboard.py aggregates stats → sort with tiebreaker → Global Leaderboard (P004 Rank 1, P001 Rank 2, P003 Unranked/Under Review) → Region Leaderboard → export CSVs
+
+Lane 4 — Matchmaking:
+  clean DataFrame + flagged_df → compute_skill_score (percentile normalized) → build_groups (Region → Ping Band → Skill Tier) → P003 excluded (High severity) → groups exported to CSV
+
+Show arrows flowing left to right across all lanes. At the end of all lanes, show a single "main.py Summary Output" box:
+  "5 players processed | 1 row dropped | 1 player flagged | 2 match groups created"
+
+Use a clean black-and-white or light-blue swimlane style. This diagram is intended for a slide deck — keep it simple and legible at presentation size.
+
+================================================================================
+QUICK REFERENCE — WHICH TOOL FOR WHICH DIAGRAM
+================================================================================
+
+Diagram 1 (System Architecture)   → Eraser.io or Whimsical AI
+Diagram 2 (Data Cleaning Flow)     → Mermaid Live Editor (mermaid.live)
+Diagram 3 (Suspicious Detection)   → draw.io or Mermaid Live Editor
+Diagram 4 (Leaderboard Logic)      → Mermaid Live Editor or Whimsical AI
+Diagram 5 (Matchmaking Tree)       → draw.io or Eraser.io
+Diagram 6 (Scaling Architecture)   → Eraser.io or Lucidchart
+Diagram 7 (End-to-End Demo Flow)   → Whimsical AI or Mermaid Live Editor
+
+HOW TO USE THESE PROMPTS:
+- For ChatGPT / Claude: Paste the prompt directly and ask for a diagram description,
+  Mermaid code, or a rendered image (ChatGPT with image generation).
+- For Eraser.io: Use the "AI Diagram" feature and paste the prompt text.
+- For Mermaid Live (mermaid.live): Ask ChatGPT to convert the prompt into
+  valid Mermaid syntax, then paste into the live editor.
+- For Whimsical AI: Open a new board, click "Generate with AI", paste the prompt.
+
+================================================================================
+PLANTUML CODE — ALL 7 DIAGRAMS
+Paste each block at: https://www.plantuml.com/plantuml/uml/
+Or use the PlantUML VS Code extension / IntelliJ plugin
+================================================================================
+
+--------------------------------------------------------------------------------
+PLANTUML 1 — SYSTEM ARCHITECTURE OVERVIEW
+--------------------------------------------------------------------------------
+
+@startuml System_Architecture
+!theme plain
+skinparam backgroundColor #F8F9FA
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam ArrowColor #444444
+skinparam ArrowThickness 1.5
+
+skinparam rectangle {
+  BackgroundColor #D6EAF8
+  BorderColor #2980B9
+  FontColor #1A252F
+  RoundCorner 12
+}
+
+skinparam database {
+  BackgroundColor #D5F5E3
+  BorderColor #1E8449
+}
+
+skinparam node {
+  BackgroundColor #FDEBD0
+  BorderColor #CA6F1E
+}
+
+title Game Ops System — Architecture Overview
+
+rectangle "INPUT LAYER" as IL #E8F8F5 {
+  rectangle "players.csv\n(Raw Match Data)" as CSV #AED6F1
+}
+
+rectangle "PROCESSING LAYER" as PL #EBF5FB {
+
+  rectangle "loader.py\n──────────────\nValidate Columns\nDrop Nulls/Corrupt Rows\nDeduplicate (player+match)\nNormalize Strings\nDerive: score_per_second\nDerive: kd_ratio" as LOADER #D6EAF8
+
+  rectangle "config.py\n──────────────\nCentral Threshold Config\nSCORE_PER_SECOND > 50\nZSCORE_MIN_MATCHES = 5\nPING_BAND_LOW_MAX = 80\nMIN_MATCH_GROUP = 4" as CONFIG #FDEDEC
+
+  rectangle "suspicious.py\n──────────────\nRule-Based Checks (5 rules)\nZ-Score Outlier Detection\nSeverity Aggregation\nRepeat-Offense Escalation" as SUSP #FADBD8
+
+  rectangle "leaderboard.py\n──────────────\nAggregate Player Stats\nSort with Tiebreaker\nGlobal Rank Table\nRegion-Wise Rank Table" as LB #D5F5E3
+
+  rectangle "matchmaking.py\n──────────────\nPercentile Skill Score\nPass 1: Region Bucket\nPass 2: Ping Band\nPass 3: Skill Tier" as MM #FEF9E7
+}
+
+rectangle "OUTPUT LAYER" as OL #FDF2E9 {
+  node "suspicious_players.csv\n(player_id, reasons, severity)" as OUT1 #FDEBD0
+  node "leaderboard_global.csv\n(rank, player_id, score, status)" as OUT2 #FDEBD0
+  node "leaderboard_region.csv\n(region, rank, player_id)" as OUT3 #FDEBD0
+  node "matchmaking_groups.csv\n(group_id, player_ids)" as OUT4 #FDEBD0
+}
+
+rectangle "OPTIONAL API LAYER" as API #F4ECF7 {
+  rectangle "FastAPI — api/routes.py\n──────────────────────\nPOST /submit-score\nGET  /leaderboard?region=\nGET  /flagged-players\nGET  /matchmaking?region=" as FASTAPI #E8DAEF
+}
+
+CSV       --> LOADER      : read & parse
+LOADER    --> SUSP        : clean DataFrame
+LOADER    --> LB          : clean DataFrame
+LOADER    --> MM          : clean DataFrame
+CONFIG    ..> SUSP        : thresholds
+CONFIG    ..> MM          : thresholds
+SUSP      --> LB          : flagged_ids
+SUSP      --> MM          : flagged_ids + severity
+SUSP      --> OUT1
+LB        --> OUT2
+LB        --> OUT3
+MM        --> OUT4
+FASTAPI   ..> LOADER      : triggers pipeline\non POST /submit-score
+FASTAPI   ..> LB          : reads for GET /leaderboard
+FASTAPI   ..> SUSP        : reads for GET /flagged-players
+FASTAPI   ..> MM          : reads for GET /matchmaking
+
+@enduml
+
+--------------------------------------------------------------------------------
+PLANTUML 2 — DATA CLEANING PIPELINE (loader.py)
+--------------------------------------------------------------------------------
+
+@startuml Data_Cleaning_Pipeline
+!theme plain
+skinparam backgroundColor #F0F4F8
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+
+skinparam activity {
+  BackgroundColor #D6EAF8
+  BorderColor #2471A3
+  FontColor #1B2631
+  DiamondBackgroundColor #FDFEFE
+  DiamondBorderColor #2471A3
+}
+
+title Data Cleaning Pipeline — loader.py
+
+start
+
+:Read CSV file\n(pd.read_csv);
+
+if (All required columns\npresent?) then (NO)
+  #FADBD8:Raise ValueError\n"Missing columns: {names}";
+  stop
+else (YES)
+endif
+
+:Drop rows with nulls\nin any required field\n[never fill with 0];
+
+note right
+  **Why not fill with 0?**
+  0 is a valid score.
+  Silent fill corrupts
+  averages and z-scores.
+end note
+
+:Enforce numeric types\n(pd.to_numeric, errors=coerce);
+
+:Drop rows where\nnumeric coercion failed;
+
+if (match_duration_seconds > 0\nAND all numeric fields >= 0?) then (NO)
+  #FADBD8:Drop row\nLog: "corrupt row";
+else (YES)
+endif
+
+:Deduplicate on\n(player_id, match_id)\nKeep first occurrence;
+
+:Normalize strings\nregion → .strip().title()\ndevice → .strip().title();
+
+:Compute derived columns\nscore_per_second = score / duration\nkd_ratio = kills / max(deaths, 1);
+
+:Reset DataFrame index;
+
+#D5F5E3:Return clean DataFrame\n(ready for downstream modules);
+
+note right
+  Print summary:
+  "Dropped X of Y rows"
+end note
+
+stop
+
+@enduml
+
+--------------------------------------------------------------------------------
+PLANTUML 3 — SUSPICIOUS PLAYER DETECTION
+--------------------------------------------------------------------------------
+
+@startuml Suspicious_Detection
+!theme plain
+skinparam backgroundColor #FFF9F9
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+
+skinparam activity {
+  BackgroundColor #FDFEFE
+  BorderColor #922B21
+  DiamondBackgroundColor #FDEDEC
+  DiamondBorderColor #922B21
+}
+
+title Suspicious Player Detection — suspicious.py
+
+|#D6EAF8| Per-Match Rule Checks |
+start
+
+:Receive match row\nfrom clean DataFrame;
+
+fork
+  if (score_per_second > 50?) then (YES)
+    #FADBD8:flag_score_spike = True\n**Severity: HIGH**;
+  else (NO)
+  endif
+fork again
+  if (kills >= 20\nAND deaths == 0?) then (YES)
+    #FADBD8:flag_zero_death_kd = True\n**Severity: HIGH**;
+  else (NO)
+  endif
+fork again
+  if (duration < 120s\nAND score > 5000?) then (YES)
+    #FDEBD0:flag_short_match = True\n**Severity: MEDIUM**;
+  else (NO)
+  endif
+fork again
+  if (kills > 50?) then (YES)
+    #FDEBD0:flag_extreme_kills = True\n**Severity: MEDIUM**;
+  else (NO)
+  endif
+fork again
+  if (ping < 5 OR ping > 500?) then (YES)
+    #FEF9E7:flag_ping_anomaly = True\n(data quality — not cheat severity);
+  else (NO)
+  endif
+end fork
+
+:Attach all flags to match row;
+
+|#FEF5FB| Z-Score Check (per player) |
+
+if (Player has >= 5 matches?) then (YES)
+  :Compute mean & std for\nscore and kills\nacross player's match history;
+  if (std == 0 or NaN?) then (YES)
+    :Skip z-score check\n(no meaningful deviation);
+  else (NO)
+    :z = (match_value - mean) / std;
+    if (|z| > 3 for score\nOR kills?) then (YES)
+      #FEF9E7:flag_zscore = True\n**Severity: LOW**;
+    else (NO)
+    endif
+  endif
+else (NO — skip)
+endif
+
+|#FDF2E9| Player Severity Aggregation |
+
+:Group all flagged matches\nby player_id;
+
+:Collect severity candidates\n(High / Medium / Low)\nfrom triggered rules;
+
+:Final severity =\nhighest candidate\n(High > Medium > Low);
+
+if (Flagged matches > 50%\nof player's total matches?) then (YES)
+  #FADBD8:Escalate to **HIGH**\n(repeat-offense rule);
+else (NO)
+endif
+
+if (Any severity candidates?) then (YES)
+  #D5F5E3:Output suspicious player row:\nplayer_id | flagged_matches\nflag_reasons | severity;
+else (NO)
+  :Player is CLEAN — skip;
+endif
+
+stop
+
+note bottom
+  Example: P003
+  score_per_second = 99000/60 = 1650 > 50
+  → flag_score_spike = True → Severity: HIGH
+end note
+
+@enduml
+
+--------------------------------------------------------------------------------
+PLANTUML 4 — LEADERBOARD RANKING LOGIC
+--------------------------------------------------------------------------------
+
+@startuml Leaderboard_Logic
+!theme plain
+skinparam backgroundColor #F9FFF9
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+
+skinparam activity {
+  BackgroundColor #D5F5E3
+  BorderColor #1E8449
+  DiamondBackgroundColor #EAFAF1
+  DiamondBorderColor #1E8449
+}
+
+title Leaderboard Generation — leaderboard.py
+
+start
+
+:Receive aggregated player stats\n(total_score, total_kills,\ntotal_deaths, matches_played,\nprimary_region);
+
+:Receive flagged_ids set\nfrom suspicious.py;
+
+:Split players into two groups;
+
+fork
+  :CLEAN PLAYERS\n(not in flagged_ids);
+
+  :Sort by tiebreaker:\n1. total_score DESC\n2. total_deaths ASC\n3. total_kills DESC\n4. matches_played DESC;
+
+  :Assign numeric rank\n(1, 2, 3 ...)\nstatus = "clean";
+
+fork again
+  :FLAGGED PLAYERS\n(in flagged_ids);
+
+  :rank = None\nstatus = "under_review";
+
+  note right
+    Flagged players are
+    NEVER assigned a rank.
+    They cannot shift a
+    clean player's position.
+  end note
+
+end fork
+
+:Concatenate:\nClean players (ranked) on top\nFlagged players (unranked) below;
+
+#D5F5E3:**OUTPUT A:**\nGlobal Leaderboard CSV\n(leaderboard_global.csv);
+
+:For Region-Wise Leaderboard:\nGroup clean players\nby primary_region;
+
+note right
+  Region tiebreak:
+  If mode() returns multiple
+  regions → use most recent
+  match's region
+end note
+
+:Apply same sort + rank logic\nwithin each region group;
+
+#D5F5E3:**OUTPUT B:**\nRegion Leaderboard CSV\n(leaderboard_region.csv);
+
+stop
+
+note bottom
+  Example output:
+  Rank 1 → P004  Score: 3500  Deaths: 6   Status: clean
+  Rank 2 → P001  Score: 3200  Deaths: 4   Status: clean
+  Unranked→ P003  Score: 99000             Status: under_review
+end note
+
+@enduml
+
+--------------------------------------------------------------------------------
+PLANTUML 5 — MATCHMAKING GROUPING ALGORITHM
+--------------------------------------------------------------------------------
+
+@startuml Matchmaking_Algorithm
+!theme plain
+skinparam backgroundColor #FFFDF0
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+
+skinparam rectangle {
+  RoundCorner 10
+}
+
+title Matchmaking Grouping — matchmaking.py
+
+rectangle "ALL PLAYERS" as ALL #D6EAF8 {
+  rectangle "Compute Percentile Skill Score\nskill = (score_pct×0.5) + (kills_pct×0.3) − (deaths_pct×0.2)" as SKILL #AED6F1
+}
+
+rectangle "SEVERITY FILTER" as SF #FADBD8 {
+  rectangle "HIGH severity\n→ Excluded entirely" as EX #FADBD8
+  rectangle "MEDIUM severity\n→ Under-Review Pool\n(matched only vs other flagged)" as UR #FDEBD0
+  rectangle "LOW severity\n→ Tagged but included\nin normal matchmaking" as LW #FEF9E7
+}
+
+rectangle "PASS 1 — REGION BUCKET\n(minimise latency)" as P1 #D5F5E3 {
+  rectangle "India" as R1 #A9DFBF
+  rectangle "SEA" as R2 #A9DFBF
+  rectangle "Europe" as R3 #A9DFBF
+  rectangle "Other..." as R4 #A9DFBF
+}
+
+rectangle "PASS 2 — PING BAND (hard rule)\nnever mix LowPing & HighPing" as P2 #FEF9E7 {
+  rectangle "LowPing\n(≤ 80ms)" as PL #FAD7A0
+  rectangle "MedPing\n(81–150ms)" as PM #FAD7A0
+  rectangle "HighPing\n(> 150ms)" as PH #FAD7A0
+}
+
+rectangle "PASS 3 — SKILL TIER\n(only if bucket ≥ 6 players)" as P3 #E8DAEF {
+  rectangle "Beginner\n(bottom 33%)" as T1 #D7BDE2
+  rectangle "Intermediate\n(middle 33%)" as T2 #D7BDE2
+  rectangle "Advanced\n(top 33%)" as T3 #D7BDE2
+  rectangle "Small Pool\n(< 6 players)\n→ Skill Mixed" as TS #FDEBD0
+}
+
+rectangle "FINAL MATCH GROUPS" as FG #D5F5E3 {
+  rectangle "India_LowPing_Advanced → [P001, P004]" as G1 #A9DFBF
+  rectangle "SEA_MedPing_Mixed (small pool) → [P005]" as G2 #FDEBD0
+  rectangle "Under_Review_Pool → [P003]" as G3 #FADBD8
+  rectangle "Groups < 4 players\n→ Waiting for more players" as G4 #D5D8DC
+}
+
+ALL    --> SF
+SF     --> P1  : eligible players
+P1     --> P2
+P2     --> P3
+P3     --> FG
+
+@enduml
+
+--------------------------------------------------------------------------------
+PLANTUML 6 — SCALING ARCHITECTURE (Production / High Traffic)
+--------------------------------------------------------------------------------
+
+@startuml Scaling_Architecture
+!theme plain
+skinparam backgroundColor #F0F3F4
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+skinparam linetype ortho
+
+skinparam rectangle {
+  RoundCorner 8
+}
+
+skinparam database {
+  BackgroundColor #D5F5E3
+  BorderColor #1E8449
+}
+
+skinparam queue {
+  BackgroundColor #FEF9E7
+  BorderColor #D4AC0D
+}
+
+skinparam node {
+  BackgroundColor #EBF5FB
+  BorderColor #2471A3
+}
+
+title Scaling Architecture — Game Ops System (200k+ Players)
+
+rectangle "CLIENTS" as CL #D6EAF8 {
+  node "Game Clients\n(Mobile / PC / Console)\nHTTP POST match result" as GC
+}
+
+rectangle "API LAYER" as AL #EBF5FB {
+  node "Load Balancer\n(auto-scales pods\nby request rate)" as LB
+
+  node "FastAPI Pod 1\n(stateless)" as P1 #AED6F1
+  node "FastAPI Pod 2\n(stateless)" as P2 #AED6F1
+  node "FastAPI Pod 3\n(stateless)" as P3 #AED6F1
+}
+
+rectangle "ASYNC PROCESSING" as AP #FEF9E7 {
+  queue "Message Queue\nKafka / AWS SQS\n──────────────\nHandles 200k+ submissions/day\nwithout blocking the API" as MQ
+  node "Worker Service\n(consumes queue\n→ writes to DB)" as WS #FAD7A0
+  node "Anomaly Detection Worker\n(rule checks on each\nnew match result)" as ADW #FAD7A0
+}
+
+rectangle "DATA LAYER" as DL #D5F5E3 {
+  database "PostgreSQL\n(Primary Store)\n──────────────\nmatches table\nplayer_aggregates table\nflagged_players table\nPartitioned by region + date" as PG
+
+  database "Redis\n(Sorted Set Cache)\n──────────────\nHot Leaderboard\nTop-100 in < 5ms\nRefreshed every 30s" as RD
+}
+
+rectangle "READ API" as RA #F4ECF7 {
+  node "GET /leaderboard\nRedis first (cache hit)\n→ fallback to PostgreSQL" as RD_EP
+  node "GET /flagged-players\nPostgreSQL direct" as FP_EP
+  node "GET /matchmaking\nPostgreSQL direct" as MM_EP
+}
+
+rectangle "MONITORING" as MON #F9EBEA {
+  node "Prometheus\n(scrapes all pods\n& workers)" as PROM
+  node "Grafana Dashboard\n──────────────\n• API Latency\n• Queue Lag\n• Error Rate" as GRAF
+}
+
+GC   --> LB       : HTTP POST /submit-score
+LB   --> P1
+LB   --> P2
+LB   --> P3
+P1   --> MQ       : async write
+P2   --> MQ
+P3   --> MQ
+MQ   --> WS       : consume
+MQ   --> ADW      : consume
+WS   --> PG       : write match records
+ADW  --> PG       : write flagged players
+PG   --> RD       : background refresh job\n(every 30s)
+RD   --> RD_EP    : cache hit
+PG   --> RD_EP    : cache miss fallback
+PG   --> FP_EP
+PG   --> MM_EP
+P1   ..> PROM     : metrics
+P2   ..> PROM     : metrics
+P3   ..> PROM     : metrics
+WS   ..> PROM     : metrics
+ADW  ..> PROM     : metrics
+PROM --> GRAF
+
+@enduml
+
+--------------------------------------------------------------------------------
+PLANTUML 7 — END-TO-END DATA FLOW (Demo Swimlane)
+--------------------------------------------------------------------------------
+
+@startuml End_To_End_Flow
+!theme plain
+skinparam backgroundColor #FAFAFA
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+
+skinparam activity {
+  BackgroundColor #EBF5FB
+  BorderColor #2471A3
+  DiamondBackgroundColor #FDFEFE
+}
+
+title End-to-End Data Flow — Demo Walkthrough
+
+|#D6EAF8| INPUT |
+start
+:Load players.csv;
+note right
+  Sample row:
+  P003, score=99000,
+  duration=60s, kills=250
+end note
+
+|#D5F5E3| LOADER (loader.py) |
+:Validate columns & types;
+:Drop nulls / corrupt rows;
+:Deduplicate + normalize strings;
+:Compute score_per_second & kd_ratio;
+#AED6F1:Clean DataFrame ready;
+
+|#FADBD8| DETECTION (suspicious.py) |
+:Run 5 rule checks\non every match row;
+note right
+  P003: score_per_second = 1650
+  Rule 1 fires → flag_score_spike = True
+end note
+:Run z-score outlier check\n(players with ≥ 5 matches);
+:Aggregate severity per player;
+#FAD7A0:flagged_df:\nP003 → HIGH severity;
+
+|#D5F5E3| LEADERBOARD (leaderboard.py) |
+:Aggregate player totals;
+:Split clean vs flagged players;
+:Sort clean players\nwith 4-level tiebreaker;
+:Assign numeric ranks to clean only;
+#A9DFBF:Global Leaderboard:\nRank 1 → P004\nRank 2 → P001\nUnranked → P003 (under_review);
+:Build region-wise tables;
+#A9DFBF:Region Leaderboard CSV;
+
+|#FEF9E7| MATCHMAKING (matchmaking.py) |
+:Compute percentile skill scores;
+:Pass 1 — Bucket by Region;
+:Pass 2 — Sub-bucket by Ping Band;
+:Pass 3 — Split by Skill Tier\n(skip if bucket < 6 players);
+note right
+  P003 excluded (HIGH severity)
+  Small pools tagged: "skill_mixed"
+end note
+#FAD7A0:Match Groups:\nIndia_LowPing_Advanced → [P001, P004]\nUnder_Review_Pool → [P003];
+
+|#EBF5FB| OUTPUT (main.py) |
+:Write all CSVs to output/ folder;
+#D6EAF8:Summary:\n5 players processed\n1 row dropped\n1 player flagged (HIGH)\n2 match groups created;
+stop
+
+@enduml
+
+================================================================================
+HOW TO RENDER PLANTUML DIAGRAMS
+================================================================================
+
+OPTION 1 — Online (fastest, no install):
+  1. Go to https://www.plantuml.com/plantuml/uml/
+  2. Copy any @startuml ... @enduml block above
+  3. Paste into the editor and click Submit
+  4. Right-click the diagram → Save image as PNG/SVG
+
+OPTION 2 — VS Code (best for editing):
+  1. Install extension: "PlantUML" by jebbs (Extension ID: jebbs.plantuml)
+  2. Create a file with .puml extension
+  3. Paste the code block
+  4. Press Alt+D to preview live
+
+OPTION 3 — IntelliJ / PyCharm:
+  1. Install the PlantUML Integration plugin
+  2. Create a .puml file, paste code, view in the preview panel
+
+OPTION 4 — Export to PNG from command line:
+  Requires Java + plantuml.jar
+  Command: java -jar plantuml.jar diagram.puml
+  Downloads: https://plantuml.com/download
+
+RECOMMENDED ORDER FOR THE DEMO SLIDE DECK:
+  Slide 1 → Diagram 1 (System Architecture Overview)
+  Slide 2 → Diagram 2 (Data Cleaning Pipeline)
+  Slide 3 → Diagram 3 (Suspicious Detection Logic)
+  Slide 4 → Diagram 4 (Leaderboard Ranking Logic)
+  Slide 5 → Diagram 5 (Matchmaking Algorithm)
+  Slide 6 → Diagram 6 (Scaling Architecture)
+  Slide 7 → Diagram 7 (End-to-End Demo Flow — use this as the opener or closer)
+
+================================================================================
+END OF DIAGRAM PROMPTS
+================================================================================

@@ -1,0 +1,2 @@
+player_id,severity,flagged_matches_count,total_matches_count,flag_reasons
+P003,High,1,1,"Extreme kills: 250 kills in a match (Limit: 50); High-kill zero-death K/D: 250 kills, 0 deaths; Score rate spike: 1650.00 score/sec (Limit: 50); Short match high score: 99000.0 score in 60s"

@@ -1,0 +1,8 @@
+lobby_name,region,ping_band,skill_tier,player_count,status,player_ids
+Europe_HighPing_Mixed,Europe,HighPing,Mixed,1,Waiting,P008
+Europe_LowPing_Mixed,Europe,LowPing,Mixed,1,Waiting,P009
+Europe_MedPing_Mixed,Europe,MedPing,Mixed,1,Waiting,P005
+India_LowPing_Advanced,India,LowPing,Advanced,3,Waiting,"P016, P014, P015"
+India_LowPing_Beginner,India,LowPing,Beginner,3,Waiting,"P002, P006, P007"
+India_LowPing_Intermediate,India,LowPing,Intermediate,2,Waiting,"P001, P004"
+Sea_MedPing_Mixed,Sea,MedPing,Mixed,4,Ready,"P010, P011, P012, P013"

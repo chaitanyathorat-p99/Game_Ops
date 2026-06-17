@@ -1,0 +1,230 @@
+Imagine that we have launched a new online multiplayer action game. During a weekend event, thousands of players are playing matches and submitting scores.
+The game team now needs a small system that can help us understand what is happening during the event.
+As part of the tech team, I want you to design or build a simple system that can handle player match data, generate a fair leaderboard, detect suspicious players, and suggest basic matchmaking groups.
+The system does not need to be perfect or production-ready. I am more interested in your thought process, structure, clarity, and technical approach.
+Note: A design on paper with Tech specifics would work too
+________________________________________
+Main Problem Statement
+I want you to design or prototype a Game Ops System for a fictional multiplayer game.
+Your system should be able to process player match data and produce the following outputs:
+1.	A fair leaderboard
+2.	A list of suspicious or abnormal players
+3.	Suggested matchmaking groups
+4.	A basic explanation of how your system can scale if the number of players increases
+5.	A short explanation of your architecture and technical choices
+________________________________________
+Sample Player Data
+You can assume that each match gives us data like this:
+Field	Meaning
+Player ID	Unique player identifier
+Match ID	Unique match identifier
+Region	Player region, such as India, SEA, Europe, etc.
+Device	Android, iOS, PC, Console, etc.
+Ping	Player network latency
+Score	Final match score
+Kills	Number of kills
+Deaths	Number of deaths
+Match Duration	Total match time in seconds
+Example (csv) :
+player_id,match_id,region,device,ping,score,kills,deaths,match_duration_seconds
+P001,M001,India,Android,55,3200,18,4,420
+P002,M001,India,Android,70,2800,14,5,430
+P003,M002,SEA,iOS,90,99000,250,0,60
+P004,M002,India,PC,40,3500,20,6,460
+P005,M003,Europe,Android,130,1200,6,8,390
+
+In this example, player P003 may be suspicious because the score and kills are extremely high for a very short match duration.
+________________________________________
+What I Expect You to Do
+1. Understand the Problem
+First, I want you to explain what problem you are solving.
+You should think about questions like:
+●	What kind of data do I need?
+●	What problems can happen in a multiplayer game event?
+●	How can I make the leaderboard fair?
+●	How can I detect suspicious players?
+●	How can I match players fairly?
+●	How will this system behave if the number of players increases?
+________________________________________
+2. Design the Leaderboard
+I want you to create or explain a leaderboard system.
+Your leaderboard should consider:
+●	Ranking players by score
+●	Handling tie scores
+●	Showing global ranking
+●	Showing region-wise ranking
+●	Ignoring or flagging suspicious scores
+●	Making sure the leaderboard feels fair
+You can use any simple logic, but you should clearly explain your rules.
+Example:
+●	Higher score gets a better rank.
+●	If two players have the same score, the player with fewer deaths gets a better rank.
+●	If a player has an impossible score, I will flag them instead of directly ranking them.
+________________________________________
+3. Detect Suspicious Players
+I want you to think about how cheating or abnormal behavior can be detected.
+You can use a rule-based method or an AI/ML-based method.
+Some examples of suspicious behavior:
+●	Very high score in very little time
+●	Extremely high kills with zero deaths
+●	Match duration is too short but score is too high
+●	Ping or region mismatch patterns
+●	Repeated abnormal scores across multiple matches
+You do not need to create a perfect anti-cheat system. I want to see how you approach the problem logically.
+________________________________________
+4. Suggest Matchmaking Groups
+I want you to create or explain a simple matchmaking system.
+You can group players using:
+●	Region
+●	Ping
+●	Skill level
+●	Score history
+●	Device type
+●	Fairness rules
+Example:
+●	Players from the same region should be matched together where possible.
+●	Players with similar skill levels should be grouped together.
+●	Players with very high ping should not be matched with low-ping players if it creates unfair gameplay.
+You can create a simple algorithm, flowchart, or explanation.
+________________________________________
+5. Think About Scaling
+I want you to explain how your system would work if the game became bigger.
+Think about this situation:
+●	Today we have 2,000 players.
+●	Tomorrow we may have 2,00,000 players.
+●	Later we may have even more.
+You should explain:
+●	What database you would use
+●	How APIs would work
+●	How leaderboard updates would be handled
+●	How you would monitor the system
+●	How you would handle high traffic
+●	How you would prevent the system from becoming slow
+You do not need to give a perfect enterprise-level answer. I want to understand whether you can think beyond a small local script.
+________________________________________
+Deliverables
+I expect you to submit the following:
+1. Short Technical Document
+Submit a document of around 1 to 2 pages explaining your solution.
+Your document should include:
+●	Problem understanding
+●	Assumptions
+●	Data structure or database design
+●	Leaderboard logic
+●	Suspicious player detection logic
+●	Matchmaking logic
+●	Architecture diagram or explanation
+●	Scaling plan
+●	Limitations of your solution
+________________________________________
+2. Prototype or Practical Output
+You can choose any one of the following based on your skillset:
+●	Python script
+●	Python notebook
+●	Java backend
+●	Simple REST API
+●	CLI-based simulator
+●	Web dashboard
+●	SQL database design
+●	Dockerized service
+●	ML model for anomaly detection
+●	DevOps deployment plan
+●	System design document with diagrams
+You are free to use the technology you are comfortable with.
+________________________________________
+3. Demo or Explanation
+You should be ready to give a short 5-minute explanation of your work.
+In your demo, I want you to show:
+●	Sample input data
+●	Final leaderboard
+●	Suspicious players
+●	Matchmaking groups
+●	Your main logic
+●	Why you made certain technical decisions
+________________________________________
+Track-Based Suggestions
+You can choose your approach based on your background.
+If You Are from AI/ML
+You can focus more on:
+●	Anomaly detection
+●	Player skill prediction
+●	Suspicious score detection
+●	Matchmaking fairness
+●	Pattern recognition from player data
+You may use simple machine learning or even basic statistical logic.
+________________________________________
+If You Are from DevOps
+You can focus more on:
+●	Docker setup
+●	Deployment plan
+●	Load testing
+●	Monitoring
+●	Logging
+●	Scaling strategy
+●	Cloud architecture
+You can explain how this system would run reliably for many players.
+________________________________________
+If You Are from Java or Python Development
+You can focus more on:
+●	Backend APIs
+●	Leaderboard service
+●	Data processing
+●	Database schema
+●	Clean code
+●	Test cases
+●	REST endpoints
+Example APIs:
+●	/submit-score
+●	/leaderboard
+●	/flagged-players
+●	/matchmaking
+________________________________________
+If You Are from a General Tech Background
+You can focus more on:
+●	Problem breakdown
+●	System flow
+●	Data model
+●	Logic explanation
+●	Edge cases
+●	User impact
+●	Game operations thinking
+Even if you do not write much code, I want to see structured thinking.
+________________________________________
+Bonus Points
+You can get bonus points if you include any of the following:
+●	Region-wise leaderboard
+●	Season-based leaderboard reset
+●	Suspicious player flagging system
+●	Simple dashboard
+●	REST API
+●	Docker Compose setup
+●	Database schema
+●	Unit tests
+●	Load testing plan
+●	Monitoring plan
+●	Architecture diagram
+●	Clear explanation of trade-offs
+________________________________________
+Evaluation Criteria
+Evaluation Area	Weightage	What I Will Check
+Problem Understanding	20%	Did you understand the actual game-tech problem?
+Technical Approach	25%	Is your solution logical, practical, and scalable?
+Prototype or Implementation	25%	Does your solution work at a basic level?
+Data Handling	10%	Can you process, clean, and reason from player data?
+Creativity	10%	Did you add useful ideas beyond the basic requirement?
+Communication	10%	Can you explain your solution clearly?
+________________________________________
+Important Notes
+I am not expecting the same type of solution from everyone.
+A DevOps student may give a strong deployment and scaling plan.
+An AI/ML student may give a strong suspicious-player detection model.
+A Java or Python student may give a strong API or backend prototype.
+A general tech student may give a strong architecture and reasoning-based solution.
+What matters most is that your solution is clear, logical, and connected to the problem.
+I want to understand how you think, how you approach technical challenges, and how well you can explain your decisions.
+________________________________________
+Final Submission Format
+Please submit:
+1.	A short document explaining your approach
+2.	Your code, prototype, notebook, diagram, or design
+3.	A short demo or explanation of your solution

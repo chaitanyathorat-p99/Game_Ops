@@ -1,0 +1,17 @@
+rank,player_id,total_score,total_kills,total_deaths,matches_played,primary_region,avg_score_per_match,status
+1.0,P009,1600.0,9,5,1,Europe,1600.0,clean
+2.0,P008,1500.0,8,7,1,Europe,1500.0,clean
+3.0,P005,1200.0,6,8,1,Europe,1200.0,clean
+1.0,P001,9700.0,55,11,3,India,3233.3333333333335,clean
+2.0,P015,4200.0,24,4,1,India,4200.0,clean
+3.0,P014,4000.0,22,5,1,India,4000.0,clean
+4.0,P016,3800.0,19,6,1,India,3800.0,clean
+5.0,P004,3500.0,20,6,1,India,3500.0,clean
+6.0,P006,3000.0,10,2,1,India,3000.0,clean
+7.0,P007,3000.0,12,4,1,India,3000.0,clean
+8.0,P002,2800.0,14,5,1,India,2800.0,clean
+1.0,P012,2700.0,14,4,1,Sea,2700.0,clean
+2.0,P011,2600.0,13,5,1,Sea,2600.0,clean
+3.0,P010,2500.0,11,6,1,Sea,2500.0,clean
+4.0,P013,2400.0,10,7,1,Sea,2400.0,clean
+,P003,99000.0,250,0,1,Sea,99000.0,under_review

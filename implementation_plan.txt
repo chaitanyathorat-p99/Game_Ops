@@ -1,0 +1,357 @@
+================================================================================
+             IMPLEMENTATION PLAN — GAME OPS SYSTEM
+             Based on: Hybrid Rule-Based Python Approach
+================================================================================
+
+OVERVIEW
+--------
+Build a single, self-contained Python solution that processes player match CSV
+data and produces all four required outputs: leaderboard, suspicious player list,
+matchmaking groups, and a scaling/architecture explanation. The deliverable is
+a Python script (or notebook) + a short design document, optionally wrapped in
+thin REST API endpoints.
+
+================================================================================
+PHASE 1 — PROJECT SETUP & DATA LAYER
+================================================================================
+
+Step 1.1 — Folder & File Structure
+------------------------------------
+Game/
+├── data/
+│   └── players.csv              ← sample input data (from PS)
+├── src/
+│   ├── __init__.py
+│   ├── loader.py                ← CSV ingestion & validation
+│   ├── leaderboard.py           ← leaderboard logic
+│   ├── suspicious.py            ← cheat/anomaly detection
+│   ├── matchmaking.py           ← player grouping logic
+│   └── utils.py                 ← shared helpers (percentile, z-score, etc.)
+├── api/
+│   ├── app.py                   ← Flask/FastAPI entry point (optional phase)
+│   └── routes.py                ← /leaderboard, /flagged-players, /matchmaking
+├── tests/
+│   └── test_logic.py            ← unit tests for core rules
+├── output/
+│   ├── leaderboard_global.csv
+│   ├── leaderboard_region.csv
+│   ├── suspicious_players.csv
+│   └── matchmaking_groups.csv
+├── design_doc.md                ← short technical document
+├── requirements.txt
+└── main.py                      ← CLI entry point (runs everything end-to-end)
+
+Step 1.2 — Dependencies
+-------------------------
+pandas          ← data loading, transformation, grouping
+numpy           ← z-score calculations, statistics
+scipy           ← optional: zscore from scipy.stats
+flask OR fastapi ← REST API (optional, add after core logic works)
+uvicorn         ← ASGI server if using FastAPI
+pytest          ← unit testing
+
+requirements.txt content:
+    pandas
+    numpy
+    scipy
+    fastapi
+    uvicorn
+    pytest
+
+Step 1.3 — Data Loading (loader.py)
+-------------------------------------
+- Read CSV using pandas (pd.read_csv)
+- Validate required columns:
+    player_id, match_id, region, device, ping, score, kills, deaths,
+    match_duration_seconds
+- Handle missing values: drop rows where player_id or match_id is null;
+  fill numeric nulls with 0
+- Type enforcement: ensure ping, score, kills, deaths, match_duration_seconds
+  are integers/floats
+- Compute derived columns immediately after load:
+    score_per_second   = score / match_duration_seconds
+    kd_ratio           = kills / max(deaths, 1)   ← avoid divide-by-zero
+- Return a clean DataFrame for use by all other modules
+
+================================================================================
+PHASE 2 — LEADERBOARD MODULE
+================================================================================
+
+Step 2.1 — Scoring Aggregation
+--------------------------------
+- Group by player_id; aggregate across all their matches:
+    total_score   = sum of score
+    total_kills   = sum of kills
+    total_deaths  = sum of deaths
+    matches_played = count of match_ids
+    avg_score_per_match = total_score / matches_played
+    regions_played  = most-frequent region (mode)
+
+Step 2.2 — Tiebreaker Rules (in priority order)
+-------------------------------------------------
+  1. Higher total_score → better rank
+  2. If tied on score → fewer total_deaths wins
+  3. If still tied → more total_kills wins
+  4. If still tied → more matches_played wins (consistency matters)
+
+Step 2.3 — Leaderboard Tables to Generate
+-------------------------------------------
+  A. Global Leaderboard
+     - Exclude players who are flagged as suspicious (mark them separately)
+     - Rank remaining players using tiebreaker rules above
+     - Add a "status" column: "clean" or "flagged"
+     - Flagged players still appear but at the bottom, labeled clearly
+
+  B. Region-Wise Leaderboard
+     - Group players by their most-frequent region
+     - Apply the same tiebreaker within each region
+     - Output one ranked table per region
+
+Step 2.4 — Output
+------------------
+- Print formatted tables to console
+- Export to output/leaderboard_global.csv and output/leaderboard_region.csv
+
+================================================================================
+PHASE 3 — SUSPICIOUS PLAYER DETECTION MODULE
+================================================================================
+
+Step 3.1 — Per-Match Rule Checks (flag a single match entry)
+--------------------------------------------------------------
+Apply these thresholds to each row in the raw data:
+
+  Rule 1 — Score-per-second spike
+    IF score_per_second > 50  → FLAG
+    (Normal gameplay: ~3200 score / 420s ≈ 7.6; P003: 99000/60 = 1650 → clear outlier)
+
+  Rule 2 — Impossible K/D with zero deaths
+    IF kills >= 20 AND deaths == 0  → FLAG
+    (Zero deaths in a high-kill match is statistically improbable)
+
+  Rule 3 — Short match + very high score
+    IF match_duration_seconds < 120 AND score > 5000  → FLAG
+
+  Rule 4 — Extreme kill count in any single match
+    IF kills > 50  → FLAG
+    (Set based on realistic game design; adjust per game type)
+
+  Rule 5 — Ping anomaly (optional, lower weight)
+    IF ping < 5 OR ping > 500  → FLAG as "network anomaly"
+
+Step 3.2 — Cross-Match Historical Deviation (z-score per player)
+------------------------------------------------------------------
+For players with 2 or more matches:
+  - Compute the player's own mean and std for score, kills, kd_ratio
+  - For each match, compute z-score:
+      z = (match_value - player_mean) / player_std
+  - IF z_score_score > 3 OR z_score_kills > 3  → FLAG as "statistical outlier"
+
+  This detects players who are normally average but had one suspiciously
+  extraordinary match — without needing any cross-player training data.
+
+Step 3.3 — Player-Level Aggregation
+-------------------------------------
+A player is marked SUSPICIOUS if:
+  - 1 or more of their matches were flagged by rules in Step 3.1, OR
+  - Any match triggers the z-score check in Step 3.2
+
+Output per suspicious player:
+  player_id | flagged_matches | flag_reasons | severity (Low/Medium/High)
+
+  Severity tiers:
+    High   → rule 1 or rule 2 triggered (near-impossible stats)
+    Medium → rule 3 or rule 4 triggered
+    Low    → only z-score deviation (unusual but not impossible)
+
+Step 3.4 — Output
+------------------
+- Print suspicious player list to console
+- Export to output/suspicious_players.csv
+
+================================================================================
+PHASE 4 — MATCHMAKING MODULE
+================================================================================
+
+Step 4.1 — Compute Skill Score per Player
+-------------------------------------------
+Use a simple weighted skill score based on clean (non-flagged) match history:
+
+  skill_score = (avg_score_per_match * 0.5)
+              + (avg_kills_per_match * 10 * 0.3)
+              - (avg_deaths_per_match * 5 * 0.2)
+
+  This is not Elo — it is a simple ordinal skill estimate sufficient for
+  bucketing, which is all matchmaking needs at this scale.
+
+Step 4.2 — Grouping Algorithm (three-pass bucketing)
+------------------------------------------------------
+  Pass 1 — Region Bucket
+    Group players by region (India, SEA, Europe, etc.)
+    Rationale: same-region players share similar ping baselines → fair gameplay
+
+  Pass 2 — Ping Filter (hard rule inside each region bucket)
+    Subdivide each region group: separate players with ping > 150ms
+    from players with ping <= 150ms.
+    Never mix sub-50ms and 200ms+ players in the same match group.
+
+  Pass 3 — Skill Tier Split (within each ping-filtered group)
+    Sort by skill_score and divide into tiers:
+      Tier 1 (Beginner)     → bottom 33% of skill scores
+      Tier 2 (Intermediate) → middle 33%
+      Tier 3 (Advanced)     → top 33%
+
+  Final match group = Region + Ping Band + Skill Tier
+  Example: "India_LowPing_Intermediate"
+
+  Minimum group size: 2 players (skip groups with only 1 player and note them
+  as "waiting for more players")
+
+Step 4.3 — Handling Suspicious Players in Matchmaking
+-------------------------------------------------------
+  - "High" severity flagged players → excluded from matchmaking entirely
+  - "Medium" severity → placed in an isolated "under-review" group
+  - "Low" severity → matched normally but tagged in output
+
+Step 4.4 — Output
+------------------
+- Print matchmaking groups to console (group name → list of player_ids)
+- Export to output/matchmaking_groups.csv
+
+================================================================================
+PHASE 5 — MAIN RUNNER & CLI
+================================================================================
+
+Step 5.1 — main.py Flow
+------------------------
+  1. Accept CSV file path as a CLI argument (default: data/players.csv)
+  2. Call loader.py → get clean DataFrame
+  3. Call suspicious.py → get flagged player set
+  4. Call leaderboard.py (pass flagged set) → get global + region tables
+  5. Call matchmaking.py (pass flagged set + skill scores) → get groups
+  6. Print all outputs to console in readable format
+  7. Write all CSVs to output/ directory
+  8. Print a summary: "X players processed, Y flagged, Z match groups created"
+
+  Usage:
+    python main.py --data data/players.csv
+
+================================================================================
+PHASE 6 — REST API (OPTIONAL BONUS — add after core works)
+================================================================================
+
+Endpoints to implement in api/routes.py:
+
+  POST /submit-score
+    Body: { player_id, match_id, region, device, ping, score, kills, deaths,
+            match_duration_seconds }
+    Action: Append row to in-memory DataFrame (or SQLite), re-run detection
+    Response: { status: "accepted" | "flagged", player_id }
+
+  GET /leaderboard?region=India&limit=10
+    Response: Ranked player list (global if no region param)
+
+  GET /flagged-players
+    Response: List of suspicious players with reasons and severity
+
+  GET /matchmaking?region=India
+    Response: Suggested match groups for that region
+
+  Run with: uvicorn api.app:app --reload
+
+================================================================================
+PHASE 7 — DESIGN DOCUMENT (design_doc.md)
+================================================================================
+
+Sections to write (keep to ~1.5 pages):
+
+  1. Problem Understanding
+     - Summarize the game-ops challenge in 2-3 sentences
+
+  2. Assumptions
+     - CSV is the data source; no real-time stream assumed
+     - Thresholds are tunable; current values based on sample data analysis
+     - "Fair" leaderboard = excludes or visibly separates cheaters
+
+  3. Data Model / Schema
+     - Table: matches (raw ingested data + derived columns)
+     - Table: players (aggregated stats per player)
+
+  4. Architecture Explanation
+     - Diagram or ASCII: CSV → Loader → [Leaderboard | Detection | Matchmaking]
+       → Output CSVs + optional REST API
+
+  5. Scaling Plan (written, no deployment needed)
+     - Database: PostgreSQL for structured queries; Redis sorted sets for the
+       hot leaderboard (O(log N) rank lookups, instant top-N reads)
+     - Ingestion: Kafka/SQS queue to buffer match result writes; async workers
+       consume the queue and update scores
+     - API: Stateless FastAPI pods behind a load balancer; horizontal scaling
+     - Leaderboard: Pre-compute and cache top 100 every 30 seconds via
+       background job; only full re-rank on demand
+     - Monitoring: Prometheus + Grafana for API latency, queue lag, error rates
+
+  6. Limitations
+     - Thresholds are manually tuned; a real system needs game-specific calibration
+     - No authentication/rate limiting on API endpoints
+     - Matchmaking is static bucketing, not a live queue with wait-time optimization
+
+================================================================================
+PHASE 8 — TESTING
+================================================================================
+
+test_logic.py — write at least these unit tests:
+
+  test_flag_score_per_second()
+    Input: row with score=99000, duration=60 → expect flagged=True
+
+  test_no_flag_normal_player()
+    Input: row with score=3200, duration=420 → expect flagged=False
+
+  test_leaderboard_tiebreaker()
+    Two players with same score; one has fewer deaths → expect that one ranks higher
+
+  test_matchmaking_region_separation()
+    Players from India and Europe → expect they land in different groups
+
+  test_kd_zero_death_flag()
+    Player with kills=25, deaths=0 → expect flagged=True
+
+  Run with: pytest tests/
+
+================================================================================
+EXECUTION ORDER SUMMARY
+================================================================================
+
+  Day 1 (Core Logic)
+  ------------------
+  [x] Set up folder structure and requirements.txt
+  [x] Implement loader.py with derived columns
+  [x] Implement suspicious.py (rules 1-4 + z-score)
+  [x] Implement leaderboard.py (global + region)
+  [x] Implement matchmaking.py (3-pass bucketing)
+  [x] Wire everything in main.py
+  [x] Test with provided sample CSV data
+
+  Day 2 (Polish & Extras)
+  ------------------------
+  [ ] Write unit tests in tests/test_logic.py
+  [ ] Write design_doc.md (~1.5 pages)
+  [ ] Add optional REST API endpoints (Flask or FastAPI)
+  [ ] Prepare 5-minute demo walkthrough (input CSV → outputs explained)
+
+================================================================================
+DEMO SCRIPT (5-MINUTE WALKTHROUGH)
+================================================================================
+
+  1. Show input CSV (30 sec) — point to P003 as the obvious outlier
+  2. Run: python main.py --data data/players.csv  (30 sec)
+  3. Show suspicious_players.csv → explain Rule 1 (score/sec) caught P003 (1 min)
+  4. Show leaderboard_global.csv → explain tiebreaker, P003 flagged not removed (1 min)
+  5. Show matchmaking_groups.csv → explain region + ping + skill bucketing (1 min)
+  6. Explain scaling plan in 2-3 sentences: Redis sorted set for leaderboard,
+     Kafka queue for match ingestion, stateless API pods (1 min)
+  7. Mention trade-offs: rule thresholds need tuning, no live queue matchmaking (30 sec)
+
+================================================================================
+END OF IMPLEMENTATION PLAN
+================================================================================

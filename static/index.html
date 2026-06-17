@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Ops Operations Center</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-fontawesome/6.4.0/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="logo-area">
+                <i class="fa-solid fa-gamepad logo-icon"></i>
+                <h2>GameOps<span>.IO</span></h2>
+            </div>
+            
+            <nav class="nav-links">
+                <button class="nav-btn active" data-tab="overview">
+                    <i class="fa-solid fa-chart-line"></i> Overview
+                </button>
+                <button class="nav-btn" data-tab="leaderboard">
+                    <i class="fa-solid fa-trophy"></i> Leaderboards
+                </button>
+                <button class="nav-btn" data-tab="suspicious">
+                    <i class="fa-solid fa-user-shield"></i> Security Console
+                </button>
+                <button class="nav-btn" data-tab="matchmaking">
+                    <i class="fa-solid fa-users"></i> Matchmaking
+                </button>
+                <button class="nav-btn" data-tab="submit">
+                    <i class="fa-solid fa-square-plus"></i> Submit Score
+                </button>
+                <button class="nav-btn" data-tab="scaling">
+                    <i class="fa-solid fa-server"></i> Scaling & Arch
+                </button>
+            </nav>
+
+            <div class="system-status-container">
+                <div class="status-header">
+                    <span>System Status</span>
+                    <span class="status-indicator online"></span>
+                </div>
+                <div class="status-body">
+                    <p>API Service: <span class="highlight">Online</span></p>
+                    <p>Matches: <span id="status-matches">0</span></p>
+                    <p>Players: <span id="status-players">0</span></p>
+                </div>
+                <button id="btn-reset-data" class="btn btn-secondary btn-sm">
+                    <i class="fa-solid fa-arrows-rotate"></i> Reset Defaults
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <header class="main-header">
+                <div class="header-title">
+                    <h1 id="page-title">Operations Overview</h1>
+                    <p id="page-subtitle">Real-time telemetry and game management control room</p>
+                </div>
+                <div class="header-actions">
+                    <label class="btn btn-primary" id="btn-upload-label">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> Upload CSV
+                        <input type="file" id="csv-file-input" accept=".csv" style="display:none;">
+                    </label>
+                </div>
+            </header>
+
+            <div class="content-body">
+                <!-- TAB 1: OVERVIEW -->
+                <section id="tab-overview" class="tab-pane active">
+                    <!-- KPI Cards Grid -->
+                    <div class="kpi-grid">
+                        <div class="kpi-card glass">
+                            <div class="kpi-icon-wrapper blue">
+                                <i class="fa-solid fa-database"></i>
+                            </div>
+                            <div class="kpi-details">
+                                <span class="kpi-title">Total Records</span>
+                                <h3 class="kpi-value" id="kpi-total-records">0</h3>
+                            </div>
+                        </div>
+
+                        <div class="kpi-card glass">
+                            <div class="kpi-icon-wrapper green">
+                                <i class="fa-solid fa-users"></i>
+                            </div>
+                            <div class="kpi-details">
+                                <span class="kpi-title">Active Players</span>
+                                <h3 class="kpi-value" id="kpi-active-players">0</h3>
+                            </div>
+                        </div>
+
+                        <div class="kpi-card glass">
+                            <div class="kpi-icon-wrapper red">
+                                <i class="fa-solid fa-skull-crossbones"></i>
+                            </div>
+                            <div class="kpi-details">
+                                <span class="kpi-title">Flagged Players</span>
+                                <h3 class="kpi-value" id="kpi-flagged-players">0</h3>
+                            </div>
+                        </div>
+
+                        <div class="kpi-card glass">
+                            <div class="kpi-icon-wrapper purple">
+                                <i class="fa-solid fa-network-wired"></i>
+                            </div>
+                            <div class="kpi-details">
+                                <span class="kpi-title">Match Lobbies</span>
+                                <h3 class="kpi-value" id="kpi-match-lobbies">0</h3>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Welcome & Upload Section -->
+                    <div class="dashboard-row">
+                        <div class="card glass flex-2">
+                            <div class="card-header">
+                                <h3>Data Source Management</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="upload-zone" id="upload-drag-zone">
+                                    <i class="fa-solid fa-file-csv upload-icon"></i>
+                                    <h4>Drag & Drop match telemetry CSV here</h4>
+                                    <p>or click the "Upload CSV" button in the header. The system will automatically validate headers, drop corrupted rows, and recompute analytics.</p>
+                                    <span class="file-spec">Required columns: player_id, match_id, region, device, ping, score, kills, deaths, match_duration_seconds</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card glass flex-1">
+                            <div class="card-header">
+                                <h3>Quick Configuration</h3>
+                            </div>
+                            <div class="card-body config-card-body">
+                                <div class="config-item">
+                                    <div class="config-label">
+                                        <span>Anti-Cheat Severity Limits</span>
+                                    </div>
+                                    <p class="config-desc">Score rate limit: <strong>50 score/sec</strong></p>
+                                    <p class="config-desc">KD limit: <strong>20 kills, 0 deaths</strong></p>
+                                    <p class="config-desc">Ping anomalies: <strong>&lt;5ms or &gt;500ms</strong></p>
+                                </div>
+                                <div class="config-item">
+                                    <div class="config-label">
+                                        <span>Matchmaking Bounds</span>
+                                    </div>
+                                    <p class="config-desc">Ping threshold: <strong>&lt;= 80ms (Low), &lt;=150ms (Med)</strong></p>
+                                    <p class="config-desc">Minimum lobby size: <strong>4 players for Ready</strong></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB 2: LEADERBOARD -->
+                <section id="tab-leaderboard" class="tab-pane">
+                    <div class="card glass">
+                        <div class="card-header table-header-actions">
+                            <div class="filter-group">
+                                <button class="btn btn-secondary btn-active" id="btn-global-lb">Global</button>
+                                <button class="btn btn-secondary" id="btn-regional-lb">Regional Breakdown</button>
+                            </div>
+                            <div class="search-box-wrapper">
+                                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                                <input type="text" id="lb-search" class="search-input" placeholder="Search Player ID...">
+                            </div>
+                        </div>
+                        <div class="card-body table-responsive">
+                            <table class="data-table" id="leaderboard-table">
+                                <thead>
+                                    <tr>
+                                        <th>Rank</th>
+                                        <th>Player ID</th>
+                                        <th>Region</th>
+                                        <th>Matches</th>
+                                        <th>Total Score</th>
+                                        <th>Total Kills</th>
+                                        <th>Total Deaths</th>
+                                        <th>Avg score/match</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="leaderboard-body">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB 3: SUSPICIOUS PLAYERS -->
+                <section id="tab-suspicious" class="tab-pane">
+                    <div class="card glass">
+                        <div class="card-header">
+                            <h3>Flagged Account Logs</h3>
+                        </div>
+                        <div class="card-body table-responsive">
+                            <table class="data-table" id="suspicious-table">
+                                <thead>
+                                    <tr>
+                                        <th>Player ID</th>
+                                        <th>Severity</th>
+                                        <th>Flagged Matches</th>
+                                        <th>Total Matches</th>
+                                        <th>Triggered Rules / Flags</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="suspicious-body">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB 4: MATCHMAKING -->
+                <section id="tab-matchmaking" class="tab-pane">
+                    <div class="matchmaking-container">
+                        <div class="filters-row">
+                            <!-- Filter options for Matchmaking view -->
+                            <div class="filter-group">
+                                <label for="mm-region-select">Region Filter:</label>
+                                <select id="mm-region-select" class="select-input">
+                                    <option value="All">All Regions</option>
+                                    <!-- Options added dynamically -->
+                                </select>
+                            </div>
+                        </div>
+                        <div class="lobby-grid" id="lobby-cards-container">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB 5: SUBMIT SCORE -->
+                <section id="tab-submit" class="tab-pane">
+                    <div class="submit-score-container">
+                        <div class="card glass submit-card">
+                            <div class="card-header">
+                                <h3>Insert Score Event</h3>
+                            </div>
+                            <div class="card-body">
+                                <form id="form-submit-score" class="form-grid">
+                                    <div class="form-group">
+                                        <label for="score-player-id">Player ID</label>
+                                        <input type="text" id="score-player-id" required placeholder="e.g. P100">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="score-match-id">Match ID</label>
+                                        <input type="text" id="score-match-id" required placeholder="e.g. M100">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="score-region">Region</label>
+                                        <select id="score-region" required>
+                                            <option value="India">India</option>
+                                            <option value="SEA">SEA</option>
+                                            <option value="Europe">Europe</option>
+                                            <option value="US East">US East</option>
+                                            <option value="US West">US West</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="score-device">Device</label>
+                                        <select id="score-device" required>
+                                            <option value="Android">Android</option>
+                                            <option value="iOS">iOS</option>
+                                            <option value="PC">PC</option>
+                                            <option value="Console">Console</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="score-ping">Ping (ms)</label>
+                                        <input type="number" id="score-ping" min="0" required placeholder="e.g. 50">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="score-score">Final Score</label>
+                                        <input type="number" id="score-score" min="0" required placeholder="e.g. 3000">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="score-kills">Kills</label>
+                                        <input type="number" id="score-kills" min="0" required placeholder="e.g. 15">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="score-deaths">Deaths</label>
+                                        <input type="number" id="score-deaths" min="0" required placeholder="e.g. 4">
+                                    </div>
+                                    <div class="form-group full-width">
+                                        <label for="score-duration">Match Duration (seconds)</label>
+                                        <input type="number" id="score-duration" min="1" required placeholder="e.g. 420">
+                                    </div>
+                                    <button type="submit" class="btn btn-primary full-width">
+                                        <i class="fa-solid fa-paper-plane"></i> Submit Match Score
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Submission Feedback Card -->
+                        <div class="card glass feedback-card" id="submission-result-card" style="display:none;">
+                            <div class="card-header">
+                                <h3>Telemetry Evaluation</h3>
+                            </div>
+                            <div class="card-body feedback-body">
+                                <div id="feedback-icon-wrapper" class="feedback-icon-wrapper">
+                                    <!-- Dynamic icon -->
+                                </div>
+                                <h3 id="feedback-title">Title</h3>
+                                <p id="feedback-text">Text</p>
+                                <div id="feedback-details" class="feedback-details-box">
+                                    <!-- Dynamic list of reasons -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB 6: SCALING & ARCHITECTURE -->
+                <section id="tab-scaling" class="tab-pane">
+                    <div class="scaling-layout">
+                        <!-- Left Lane: Tech Document -->
+                        <div class="card glass doc-card flex-2">
+                            <div class="card-header">
+                                <h3>Scaling & Systems Design Document</h3>
+                            </div>
+                            <div class="card-body markdown-style">
+                                <h4>1. Production Architecture (Scaling to 200,000+ Players)</h4>
+                                <p>To scale from 2,000 static players to a highly dynamic, concurrent player base, we decouple match score submission from live query evaluation. This prevents high ingestion rates from locking database tables or slowing down reads.</p>
+                                
+                                <h5>Stateless API Layer</h5>
+                                <p>The FastAPI backend runs as containerized pods inside an auto-scaling cluster (e.g., Kubernetes). A load balancer distributes incoming HTTP requests. API servers validate payload structures, generate unique request IDs, and immediately drop writes onto a messaging bus rather than writing directly to a transactional database.</p>
+                                
+                                <h5>Asynchronous Ingestion (Kafka / AWS SQS)</h5>
+                                <p>A message queue acts as a buffer. Under high load (e.g., millions of submissions during weekends), it absorbs ingestion spikes. Asynchronous workers consume batches from Kafka and stream them into the primary database, ensuring the APIs remain highly responsive (latencies &lt; 20ms).</p>
+                                
+                                <h5>Data Layer Partitioning & Caching</h5>
+                                <ul>
+                                    <li><strong>Primary Store (PostgreSQL):</strong> Stores raw telemetry, historical aggregation tables, and user profiles. PostgreSQL tables are horizontally partitioned by <code>region</code> and <code>creation_date</code>, preventing single large tables from causing slow lookups.</li>
+                                    <li><strong>Hot Leaderboard Cache (Redis Sorted Sets):</strong> Generating full leaderboards on PostgreSQL using aggregate functions is expensive. Instead, Redis <code>ZADD</code> is used to update players' score ranks in $O(\log N)$ time. Reads (<code>ZRANGE</code>) retrieve rankings instantaneously (&lt; 5ms).</li>
+                                </ul>
+
+                                <h4>2. Anti-Cheat & Security Policy</h4>
+                                <p>We implement a layered security check. In production, Rule Checks are performed by stream-processing engines (e.g. Apache Flink) running directly on Kafka topics. When a suspicious event fires, it posts an alert. Player Z-scores are computed by background batch engines (e.g. Apache Spark) operating on the primary database, running every few minutes to flag slow-building anomalies.</p>
+
+                                <h4>3. Monitoring Strategy</h4>
+                                <ul>
+                                    <li><strong>Prometheus:</strong> Scrapes application-level metrics (HTTP response distributions, active connections, queue processing lag, worker status).</li>
+                                    <li><strong>Grafana:</strong> Visualizes Prometheus metrics to display real-time dashboard tracking:
+                                        <ul>
+                                            <li><strong>API Latency:</strong> p95 and p99 server response latencies.</li>
+                                            <li><strong>Queue Lag:</strong> Number of unconsumed messages in SQS/Kafka.</li>
+                                            <li><strong>Security Telemetry:</strong> Count of flagged cheaters per minute.</li>
+                                        </ul>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- Right Lane: Interactive Architecture Visualization -->
+                        <div class="card glass visual-card flex-1">
+                            <div class="card-header">
+                                <h3>Lobby & Data Flow</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="arch-visual-container">
+                                    <div class="arch-node input">
+                                        <div class="node-icon"><i class="fa-solid fa-mobile-screen-button"></i></div>
+                                        <span>Game Clients</span>
+                                    </div>
+                                    <div class="arch-arrow"><i class="fa-solid fa-chevron-down"></i></div>
+                                    <div class="arch-node api">
+                                        <div class="node-icon"><i class="fa-solid fa-server"></i></div>
+                                        <span>FastAPI / Load Balancer</span>
+                                    </div>
+                                    <div class="arch-arrow"><i class="fa-solid fa-chevron-down"></i></div>
+                                    <div class="arch-node queue">
+                                        <div class="node-icon"><i class="fa-solid fa-list-ol"></i></div>
+                                        <span>In-Memory Python Queue</span>
+                                    </div>
+                                    <div class="arch-arrow"><i class="fa-solid fa-chevron-down"></i></div>
+                                    <div class="arch-node processing">
+                                        <div class="node-icon"><i class="fa-solid fa-gears"></i></div>
+                                        <span>Core Analytics Engines</span>
+                                        <small>(Loader, Leaderboard, Anti-Cheat, Matchmaking)</small>
+                                    </div>
+                                    <div class="arch-arrow"><i class="fa-solid fa-chevron-down"></i></div>
+                                    <div class="arch-node output-node">
+                                        <div class="node-icon"><i class="fa-solid fa-file-export"></i></div>
+                                        <span>CSV Reports / API Response</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Custom JS -->
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>
